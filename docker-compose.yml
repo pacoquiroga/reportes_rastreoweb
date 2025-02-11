@@ -1,0 +1,71 @@
+version: "3"
+
+name: reportes_rastreoweb
+
+services:
+  reportes_rastreoweb:
+    build:
+      context: /home/fquiroga/rastreoweb/reportes_rastreoweb
+    container_name: reportes_rastreoweb
+    ports:
+      - "8008:8008"
+    volumes:
+      - /home/fquiroga/rastreoweb/reportes_rastreoweb:/app
+    env_file:
+      - /home/fquiroga/rastreoweb/reportes_rastreoweb/.env
+    networks:
+      - network
+
+  reportes_react:
+    build:
+      context: /home/fquiroga/rastreoweb/Gestion_Vehicular 
+    container_name: reportes_react
+    ports:
+      - "5177:80" 
+    depends_on:
+      - reportes_rastreoweb
+    networks:
+      - network
+
+networks:
+  network:
+    driver: bridge
+
+
+
+# version: "3"
+
+# name: reportes_rastreoweb
+
+# services:
+#   reportes_rastreoweb:
+#     build:
+#       context: D:\Proyectos\reportes_rastreoweb
+#     container_name: reportes_rastreoweb
+#     ports:
+#       - "8008:8008"
+#     volumes:
+#       - D:\Proyectos\reportes_rastreoweb:/app
+#     env_file:
+#       - D:\Proyectos\reportes_rastreoweb\.env
+#     networks:
+#       - network
+
+#   reportes_react:
+#     build:
+#       context: D:\Proyectos\rastreo-web-frontend\Gestion_Vehicular
+#     container_name: reportes_react
+#     ports:
+#       - "5177:80"
+#     volumes:
+#       - D:\Proyectos\rastreo-web-frontend\Gestion_Vehicular:/app
+#     env_file:
+#       - D:\Proyectos\rastreo-web-frontend\Gestion_Vehicular\.env
+#     depends_on:
+#       - reportes_rastreoweb
+#     networks:
+#       - network
+
+# networks:
+#   network:
+#     driver: bridge
