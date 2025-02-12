@@ -7,10 +7,10 @@ app = FastAPI()
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permitir cualquier origen
+    allow_origins=["*"],  
     allow_credentials=True,
-    allow_methods=["*"],  # Permitir cualquier método (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],  # Permitir cualquier encabezado
+    allow_methods=["*"],  
+    allow_headers=["*"],  
 )
 
 @app.get("/")

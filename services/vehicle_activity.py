@@ -41,6 +41,8 @@ async def most_active_vehicle(vehicle, start_date, end_date):
     start_date = start_date_dt.date()
     end_date = end_date_dt.date()
 
+    print(f"start_date: {start_date}, end_date: {end_date}")
+
     registros_actividad = main_db.query(ReporteActividad).filter(
         ReporteActividad.vhc_id == existing_vehicle.vhc_id,
         ReporteActividad.fecha.between(start_date, end_date)
@@ -60,8 +62,10 @@ async def most_active_vehicle(vehicle, start_date, end_date):
 
         try:
             query = text("""SELECT gpsdatetime, event, iec, speed, odometer
-                             FROM rds_avl_state
-                             WHERE gpsdatetime BETWEEN :start_date AND :end_date;""")
+                        FROM rds_avl_state
+                        WHERE gpsdatetime BETWEEN :start_date AND :end_date
+                        ORDER BY gpsdatetime ASC;
+                        """)
             result = await asyncio.to_thread(
                 db_session.execute,
                 query,
@@ -99,12 +103,13 @@ async def most_active_vehicle(vehicle, start_date, end_date):
 
             df = df[df["date"].isin(dias_faltantes)]
 
-            df = df.copy()  # Asegura que df es una copia independiente
+            # Copia del DataFrame original para recalcular si hay valores negativos
+            df_original = df.copy()
+
             df.loc[:, "activity_change"] = (
                 ((df["speed"] > 0) & (df["speed"].shift() == 0) & (df["iec"] == 1)).astype(int) - 
                 ((df["speed"] == 0) & (df["speed"].shift() > 0)).astype(int)
             )
-
 
             activity_periods = df[df["activity_change"] != 0].copy()
             activity_periods["interval"] = activity_periods["gpsdatetime"].diff().shift(-1)
@@ -117,25 +122,46 @@ async def most_active_vehicle(vehicle, start_date, end_date):
                 distance = group["odometer"].max() - group["odometer"].min() if not group["odometer"].isna().all() else 0
                 hours_activity = activity_time_seconds / 3600
 
-                if date == today:
+                # Verifica si el resultado es negativo
+                if hours_activity < 0:
+                    # Recalcula usando el DataFrame original para evitar errores acumulativos
+                    df_temp = df_original[df_original["date"] == date].copy()
+                    df_temp.loc[:, "activity_change"] = (
+                        ((df_temp["speed"] > 0) & (df_temp["speed"].shift() == 0) & (df_temp["iec"] == 1)).astype(int) - 
+                        ((df_temp["speed"] == 0) & (df_temp["speed"].shift() > 0)).astype(int)
+                    )
+
+                    activity_periods_temp = df_temp[df_temp["activity_change"] != 0].copy()
+                    activity_periods_temp["interval"] = activity_periods_temp["gpsdatetime"].diff().shift(-1)
+                    activity_intervals_temp = activity_periods_temp[activity_periods_temp["activity_change"] == 1]
+
+                    activity_time_seconds = activity_intervals_temp["interval"].dt.total_seconds().sum()
+                    hours_activity = activity_time_seconds / 3600
+
+                if hours_activity >= 0:
                     calculated_activity.append({
                         "date": date.isoformat(),
                         "activity_hours": f"{hours_activity:.2f}",
                         "total_distance": float(distance),
                     })
+
+                    if date != today:
+                        newReporteActividad = ReporteActividad(
+                            vhc_id=existing_vehicle.vhc_id,
+                            fecha=date,
+                            horas_actividad=hours_activity,
+                            distancia=distance
+                        )
+                        main_db.add(newReporteActividad)
+                        main_db.commit()
                 else:
-                    calculated_activity.append({
-                        "date": date.isoformat(),
-                        "activity_hours": f"{hours_activity:.2f}",
-                        "total_distance": float(distance),
-                    })
-                    newReporteActividad = ReporteActividad(
+                    errorReporteActividad = ReporteActividad(
                         vhc_id=existing_vehicle.vhc_id,
                         fecha=date,
-                        horas_actividad=hours_activity,
-                        distancia=distance
+                        horas_actividad=-1,
+                        distancia=-1
                     )
-                    main_db.add(newReporteActividad)
+                    main_db.add(errorReporteActividad)
                     main_db.commit()
 
         finally:
@@ -180,6 +206,3 @@ async def most_active_vehicle(vehicle, start_date, end_date):
         "dias_laborables": laborable_days,
         "dias_no_laborables": non_laborable_days
     }
-
-
-
